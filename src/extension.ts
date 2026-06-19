@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import axios from "axios";
+import { getDashboardHTML } from "./webview/dashboard";
 
 interface SolvedProblem {
   rating: number;
@@ -174,6 +175,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         const solvedProblems = new Map<string, SolvedProblem>();
 
+        console.log(acceptedSubmissions);
         for (const submission of acceptedSubmissions) {
           const problemId = `${submission.problem.contestId}-${submission.problem.index}`;
 
@@ -205,6 +207,41 @@ export function activate(context: vscode.ExtensionContext) {
           }
         }
 
+        const sortedTopics = [...tagFrequency.entries()];
+        sortedTopics.sort((a, b) => a[1] - b[1]);
+        const weakTopics = sortedTopics.slice(0, 5);
+        const strongTopics = [...sortedTopics].reverse().slice(0, 5);
+
+        
+        const panel = vscode.window.createWebviewPanel(
+          "cpGymDashboard",
+          "CP Gym Dashboard",
+          vscode.ViewColumn.One,
+          {},
+        );
+
+        const weakTopicsHTML = weakTopics
+          .map(
+            ([topic, count], index) =>
+              `<li>${index + 1}. ${topic} (${count} solved)</li>`,
+          )
+          .join("");
+
+        const strongTopicsHTML = strongTopics
+          .map(
+            ([topic, count], index) =>
+              `<li>${index + 1}. ${topic} (${count} solved)</li>`,
+          )
+          .join("");
+
+       panel.webview.html = getDashboardHTML(
+  handle,
+  submissions.length,
+  acceptedSubmissions.length,
+  solvedProblems.size,
+  weakTopicsHTML,
+  strongTopicsHTML
+);
         // Calculate weak topics from target division's relevant tags
         const weakTopicsList = targetDivision.relevantTags.map((tag) => {
           const count = tagFrequency.get(tag) ?? 0;
@@ -253,7 +290,6 @@ export function activate(context: vscode.ExtensionContext) {
           outputChannel.appendLine(`${index + 1}. ${topic} (${count} solved)`);
         });
 
-        outputChannel.show();
       } catch (error) {
         console.error(error);
         vscode.window.showErrorMessage("Failed to fetch Codeforces data.");
