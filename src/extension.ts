@@ -6,6 +6,122 @@ interface SolvedProblem {
   tags: string[];
 }
 
+interface DivisionConfig {
+  name: string;
+  minRating: number;
+  maxRating: number;
+  relevantTags: string[];
+}
+
+const DIVISIONS: DivisionConfig[] = [
+  {
+    name: "Pupil",
+    minRating: 1200,
+    maxRating: 1399,
+    relevantTags: [
+      "implementation",
+      "greedy",
+      "brute force",
+      "math",
+      "sortings",
+      "constructive algorithms",
+      "two pointers",
+      "binary search",
+      "strings",
+      "bitmasks",
+      "data structures",
+    ],
+  },
+  {
+    name: "Specialist",
+    minRating: 1400,
+    maxRating: 1599,
+    relevantTags: [
+      "implementation",
+      "greedy",
+      "brute force",
+      "math",
+      "sortings",
+      "constructive algorithms",
+      "two pointers",
+      "binary search",
+      "strings",
+      "bitmasks",
+      "data structures",
+      "dfs and similar",
+      "graphs",
+      "number theory",
+      "dp",
+      "combinatorics",
+      "trees",
+      "dsu",
+    ],
+  },
+  {
+    name: "Expert",
+    minRating: 1600,
+    maxRating: 1899,
+    relevantTags: [
+      "implementation",
+      "greedy",
+      "math",
+      "constructive algorithms",
+      "two pointers",
+      "binary search",
+      "bitmasks",
+      "data structures",
+      "dfs and similar",
+      "graphs",
+      "number theory",
+      "dp",
+      "combinatorics",
+      "trees",
+      "dsu",
+      "shortest paths",
+      "divide and conquer",
+      "hashing",
+      "probabilities",
+      "games",
+      "geometry",
+      "strings",
+    ],
+  },
+  {
+    name: "Candidate Master / Master",
+    minRating: 1900,
+    maxRating: 2399,
+    relevantTags: [
+      "implementation",
+      "greedy",
+      "math",
+      "constructive algorithms",
+      "binary search",
+      "bitmasks",
+      "data structures",
+      "dfs and similar",
+      "graphs",
+      "number theory",
+      "dp",
+      "combinatorics",
+      "trees",
+      "dsu",
+      "shortest paths",
+      "divide and conquer",
+      "hashing",
+      "probabilities",
+      "games",
+      "geometry",
+      "strings",
+      "string suffix structures",
+      "fft",
+      "flows",
+      "graph matchings",
+      "meet-in-the-middle",
+      "matrices",
+    ],
+  },
+];
+
 const outputChannel = vscode.window.createOutputChannel("CP Gym");
 
 export function activate(context: vscode.ExtensionContext) {
@@ -23,11 +139,34 @@ export function activate(context: vscode.ExtensionContext) {
           return;
         }
 
-        const { data } = await axios.get(
+        const { data: statusData } = await axios.get(
           `https://codeforces.com/api/user.status?handle=${handle}`,
         );
+        const submissions = statusData.result;
 
-        const submissions = data.result;
+        // Fetch user info (rating, rank)
+        let currentRating = 0;
+        let currentRank = "unrated";
+        try {
+          const { data: infoData } = await axios.get(
+            `https://codeforces.com/api/user.info?handles=${handle}`,
+          );
+          if (infoData.status === "OK" && infoData.result.length > 0) {
+            currentRating = infoData.result[0].rating ?? 0;
+            currentRank = infoData.result[0].rank ?? "unrated";
+          }
+        } catch (infoError) {
+          console.error("Failed to fetch user info, using defaults", infoError);
+        }
+
+        // Determine target division
+        let targetDivision = DIVISIONS[DIVISIONS.length - 1];  // pointd to CM 
+        for (const div of DIVISIONS) {
+          if (currentRating < div.minRating) {
+            targetDivision = div;
+            break;
+          }
+        }
 
         const acceptedSubmissions = submissions.filter(
           (submission: any) => submission.verdict === "OK",
@@ -49,27 +188,36 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showInformationMessage(
           [
             `Handle: ${handle}`,
-            `Total Submissions: ${submissions.length}`,
-            `Accepted Submissions: ${acceptedSubmissions.length}`,
-            `Solved Problems: ${solvedProblems.size}`,
+            `Rating: ${currentRating} (${currentRank})`,
+            `Target: ${targetDivision.name}`,
+            `Solved: ${solvedProblems.size}`,
           ].join(" | "),
         );
 
+        // Compile overall tag frequency
         const tagFrequency = new Map<string, number>();
         for (const [id, problem] of solvedProblems) {
           for (const tag of problem.tags) {
             if (!tagFrequency.has(tag)) {
               tagFrequency.set(tag, 0);
             }
-
             tagFrequency.set(tag, tagFrequency.get(tag)! + 1);
           }
         }
-        const sortedTopics = [...tagFrequency.entries()];
-        sortedTopics.sort((a, b) => a[1] - b[1]);
-        console.log(sortedTopics);
 
-        const weakTopics = sortedTopics.slice(0, 5);
+        // Calculate weak topics from target division's relevant tags
+        const weakTopicsList = targetDivision.relevantTags.map((tag) => {
+          const count = tagFrequency.get(tag) ?? 0;
+          return [tag, count] as [string, number];
+        });
+        weakTopicsList.sort((a, b) => a[1] - b[1]);
+        const weakTopics = weakTopicsList.slice(0, 5);
+
+        // Calculate strong topics from overall solved tags (highest frequency first)
+        const sortedAllTopics = [...tagFrequency.entries()];
+        sortedAllTopics.sort((a, b) => b[1] - a[1]);
+        const strongTopics = sortedAllTopics.slice(0, 5);
+
         outputChannel.clear();
 
         outputChannel.appendLine("CP Analysis Dashboard");
@@ -77,6 +225,10 @@ export function activate(context: vscode.ExtensionContext) {
         outputChannel.appendLine("");
 
         outputChannel.appendLine(`Handle: ${handle}`);
+        outputChannel.appendLine(`Current Rating: ${currentRating} (${currentRank})`);
+        outputChannel.appendLine(
+          `Target Division: ${targetDivision.name} (Rating ${targetDivision.minRating}-${targetDivision.maxRating})`,
+        );
         outputChannel.appendLine(`Total Submissions: ${submissions.length}`);
         outputChannel.appendLine(
           `Accepted Submissions: ${acceptedSubmissions.length}`,
@@ -84,16 +236,17 @@ export function activate(context: vscode.ExtensionContext) {
         outputChannel.appendLine(`Solved Problems: ${solvedProblems.size}`);
 
         outputChannel.appendLine("");
-        outputChannel.appendLine("Weak Topics");
-        outputChannel.appendLine("-----------");
+        outputChannel.appendLine(`Weak Topics (Target: ${targetDivision.name})`);
+        outputChannel.appendLine(
+          "-----------" + "-".repeat(targetDivision.name.length),
+        );
 
         weakTopics.forEach(([topic, count], index) => {
           outputChannel.appendLine(`${index + 1}. ${topic} (${count} solved)`);
         });
 
-        const strongTopics = [...sortedTopics].reverse().slice(0, 5);
         outputChannel.appendLine("");
-        outputChannel.appendLine("Strong Topics");
+        outputChannel.appendLine("Strong Topics (Overall)");
         outputChannel.appendLine("-------------");
 
         strongTopics.forEach(([topic, count], index) => {
@@ -103,7 +256,6 @@ export function activate(context: vscode.ExtensionContext) {
         outputChannel.show();
       } catch (error) {
         console.error(error);
-
         vscode.window.showErrorMessage("Failed to fetch Codeforces data.");
       }
     },
