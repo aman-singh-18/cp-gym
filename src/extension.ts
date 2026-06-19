@@ -123,8 +123,6 @@ const DIVISIONS: DivisionConfig[] = [
   },
 ];
 
-const outputChannel = vscode.window.createOutputChannel("CP Gym");
-
 export function activate(context: vscode.ExtensionContext) {
   const disposable = vscode.commands.registerCommand(
     "cp-gym.helloWorld",
@@ -207,10 +205,19 @@ export function activate(context: vscode.ExtensionContext) {
           }
         }
 
-        const sortedTopics = [...tagFrequency.entries()];
-        sortedTopics.sort((a, b) => a[1] - b[1]);
-        const weakTopics = sortedTopics.slice(0, 5);
-        const strongTopics = [...sortedTopics].reverse().slice(0, 5);
+
+        // Calculate weak topics from target division's relevant tags
+        const weakTopicsList = targetDivision.relevantTags.map((tag) => {
+          const count = tagFrequency.get(tag) ?? 0;
+          return [tag, count] as [string, number];
+        });
+        weakTopicsList.sort((a, b) => a[1] - b[1]);
+        const weakTopics = weakTopicsList.slice(0, 5);
+
+        // Calculate strong topics from overall solved tags (highest frequency first)
+        const sortedAllTopics = [...tagFrequency.entries()];
+        sortedAllTopics.sort((a, b) => b[1] - a[1]);
+        const strongTopics = sortedAllTopics.slice(0, 5);
 
         
         const panel = vscode.window.createWebviewPanel(
@@ -234,61 +241,14 @@ export function activate(context: vscode.ExtensionContext) {
           )
           .join("");
 
-       panel.webview.html = getDashboardHTML(
-  handle,
-  submissions.length,
-  acceptedSubmissions.length,
-  solvedProblems.size,
-  weakTopicsHTML,
-  strongTopicsHTML
-);
-        // Calculate weak topics from target division's relevant tags
-        const weakTopicsList = targetDivision.relevantTags.map((tag) => {
-          const count = tagFrequency.get(tag) ?? 0;
-          return [tag, count] as [string, number];
-        });
-        weakTopicsList.sort((a, b) => a[1] - b[1]);
-        const weakTopics = weakTopicsList.slice(0, 5);
-
-        // Calculate strong topics from overall solved tags (highest frequency first)
-        const sortedAllTopics = [...tagFrequency.entries()];
-        sortedAllTopics.sort((a, b) => b[1] - a[1]);
-        const strongTopics = sortedAllTopics.slice(0, 5);
-
-        outputChannel.clear();
-
-        outputChannel.appendLine("CP Analysis Dashboard");
-        outputChannel.appendLine("====================");
-        outputChannel.appendLine("");
-
-        outputChannel.appendLine(`Handle: ${handle}`);
-        outputChannel.appendLine(`Current Rating: ${currentRating} (${currentRank})`);
-        outputChannel.appendLine(
-          `Target Division: ${targetDivision.name} (Rating ${targetDivision.minRating}-${targetDivision.maxRating})`,
+        panel.webview.html = getDashboardHTML(
+          handle,
+          submissions.length,
+          acceptedSubmissions.length,
+          solvedProblems.size,
+          weakTopicsHTML,
+          strongTopicsHTML
         );
-        outputChannel.appendLine(`Total Submissions: ${submissions.length}`);
-        outputChannel.appendLine(
-          `Accepted Submissions: ${acceptedSubmissions.length}`,
-        );
-        outputChannel.appendLine(`Solved Problems: ${solvedProblems.size}`);
-
-        outputChannel.appendLine("");
-        outputChannel.appendLine(`Weak Topics (Target: ${targetDivision.name})`);
-        outputChannel.appendLine(
-          "-----------" + "-".repeat(targetDivision.name.length),
-        );
-
-        weakTopics.forEach(([topic, count], index) => {
-          outputChannel.appendLine(`${index + 1}. ${topic} (${count} solved)`);
-        });
-
-        outputChannel.appendLine("");
-        outputChannel.appendLine("Strong Topics (Overall)");
-        outputChannel.appendLine("-------------");
-
-        strongTopics.forEach(([topic, count], index) => {
-          outputChannel.appendLine(`${index + 1}. ${topic} (${count} solved)`);
-        });
 
       } catch (error) {
         console.error(error);
