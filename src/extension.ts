@@ -1,12 +1,11 @@
 import * as vscode from "vscode";
 import axios from "axios";
+import { getDashboardHTML } from "./webview/dashboard";
 
 interface SolvedProblem {
   rating: number;
   tags: string[];
 }
-
-const outputChannel = vscode.window.createOutputChannel("CP Gym");
 
 export function activate(context: vscode.ExtensionContext) {
   const disposable = vscode.commands.registerCommand(
@@ -35,6 +34,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         const solvedProblems = new Map<string, SolvedProblem>();
 
+        console.log(acceptedSubmissions);
         for (const submission of acceptedSubmissions) {
           const problemId = `${submission.problem.contestId}-${submission.problem.index}`;
 
@@ -65,42 +65,43 @@ export function activate(context: vscode.ExtensionContext) {
             tagFrequency.set(tag, tagFrequency.get(tag)! + 1);
           }
         }
+
         const sortedTopics = [...tagFrequency.entries()];
         sortedTopics.sort((a, b) => a[1] - b[1]);
-        console.log(sortedTopics);
-
         const weakTopics = sortedTopics.slice(0, 5);
-        outputChannel.clear();
-
-        outputChannel.appendLine("CP Analysis Dashboard");
-        outputChannel.appendLine("====================");
-        outputChannel.appendLine("");
-
-        outputChannel.appendLine(`Handle: ${handle}`);
-        outputChannel.appendLine(`Total Submissions: ${submissions.length}`);
-        outputChannel.appendLine(
-          `Accepted Submissions: ${acceptedSubmissions.length}`,
-        );
-        outputChannel.appendLine(`Solved Problems: ${solvedProblems.size}`);
-
-        outputChannel.appendLine("");
-        outputChannel.appendLine("Weak Topics");
-        outputChannel.appendLine("-----------");
-
-        weakTopics.forEach(([topic, count], index) => {
-          outputChannel.appendLine(`${index + 1}. ${topic} (${count} solved)`);
-        });
-
         const strongTopics = [...sortedTopics].reverse().slice(0, 5);
-        outputChannel.appendLine("");
-        outputChannel.appendLine("Strong Topics");
-        outputChannel.appendLine("-------------");
 
-        strongTopics.forEach(([topic, count], index) => {
-          outputChannel.appendLine(`${index + 1}. ${topic} (${count} solved)`);
-        });
+        
+        const panel = vscode.window.createWebviewPanel(
+          "cpGymDashboard",
+          "CP Gym Dashboard",
+          vscode.ViewColumn.One,
+          {},
+        );
 
-        outputChannel.show();
+        const weakTopicsHTML = weakTopics
+          .map(
+            ([topic, count], index) =>
+              `<li>${index + 1}. ${topic} (${count} solved)</li>`,
+          )
+          .join("");
+
+        const strongTopicsHTML = strongTopics
+          .map(
+            ([topic, count], index) =>
+              `<li>${index + 1}. ${topic} (${count} solved)</li>`,
+          )
+          .join("");
+
+       panel.webview.html = getDashboardHTML(
+  handle,
+  submissions.length,
+  acceptedSubmissions.length,
+  solvedProblems.size,
+  weakTopicsHTML,
+  strongTopicsHTML
+);
+
       } catch (error) {
         console.error(error);
 
