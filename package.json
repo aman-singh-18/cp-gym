@@ -1,8 +1,8 @@
 {
-  "name": "cp-gym",
-  "displayName": "cp-gym",
+  "name": "CompetitiveProgramming-Gym",
+  "displayName": "Competitive Programming Gym",
   "description": "competitive programming companion",
-  "publisher": "SujalAgarwal",
+  "publisher": "ASxSA",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.125.0"
